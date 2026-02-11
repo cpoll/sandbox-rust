@@ -1,44 +1,140 @@
-use scraper::Html;
+use scraper::{Html, Selector};
+use std::fs;
+use std::fs::File;
+use std::{error::Error, io, process};
+
+const WORK_PATH: &str = "/Users/cristian.poll/ws/sandbox-rust/web_scraper/output";
 
 #[tokio::main]
 async fn main() {
-    //    let body = get_dictionary_com_page(1).await;
-    //    println!("{body}");
-    // say_hello().await;
+    //let text: String = get_dictionary_com_page(1).await;
+    let result_path: String = format!("{}/result.html", WORK_PATH);
+    let text: String = load_page_result(result_path); // For testing without scraping repeatedly
+    //save_page_result(&text, result_path); // For testing without scraping repeatedly
 
-    // let response: reqwest::Response = reqwest::get("https://www.rust-lang.org").await.unwrap();
+    // Create a csv writer and write the header. Will truncate existing file.
+    // TODO: Don't truncate, so we can add on if our scrape ends early
+    let csv_path: String = format!("{}/output.csv", WORK_PATH); // TODO: Use std::path::Path
+    let mut csv_file = File::create(csv_path).expect("path should be writable");
+    let mut wtr = csv::Writer::from_writer(csv_file);
+    wtr.write_record([
+        "Word",
+        "Date",
+        "Phonetics",
+        "Part of Speech",
+        "Definition",
+        "Explanation",
+        "Example",
+    ])
+    .expect("csv should be writable");
 
-    // match response.status() {
-    //     reqwest::StatusCode::OK => {
-    //         println!("OK");
-    //     }
-    //     _ => {
-    //         panic!("Request failed");
-    //     }
-    // }
+    println!("Parsing");
+    let words = parse_dictionary_com_page(&text);
 
-    // // TODO: Read more about Rust error propagation (?) and unwrap
-    // let text = response.text().await.unwrap();
-
-    let text: String = get_dictionary_com_page(1).await;
-
-    // TODO: Save this in a file so we don't hit dictionary.com too often while testing
-
-    parse_dictionary_com_page(text);
-
-    println!("{text}");
+    // Create an empty csv file
+    // Load a page
+    // Parse the page and concatenate it to the csv file
+    // Should I use Serde instead?
+    // [{ word: "foo", date: "123" }]
 }
 
-async fn say_hello() {
-    println!("hello, world!");
+fn save_page_result(content: &str, path: &str) {
+    fs::write(path, content).expect("path should be writable");
 }
 
-fn parse_dictionary_com_page(&text: &str) {
+fn load_page_result(path: String) -> String {
+    let data = fs::read_to_string(path).expect("path should exist");
+    return data;
+}
+
+// TODO: Turn this into an iterator that puts out a String array for every word on the page
+fn parse_dictionary_com_page(text: &str) {
     let document = Html::parse_document(text);
+
+    // See: https://www.scrapingbee.com/blog/web-scraping-rust/
+    // See: https://docs.rs/scraper/latest/scraper/
+
+    // For each <div class="wotd-entry-wrapper">:
+    // Date: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(1) > div:nth-child(1) (.wotd-entry-date)
+    // Name: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(1) > a:nth-child(2) (.wotd-entry-headword)
+    // Phonetics: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(1) > div:nth-child(3) > p:nth-child(2) (.wotd-entry-phonetics)
+    // Part of speech: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(2) > div:nth-child(1) (.wotd-entry-pos)
+    // Definition: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(2) > p:nth-child(2) (.wotd-entry-definition)
+    // Explanation: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(3) > p:nth-child(2) (.wotd-entry-explanation-section p) Note: <b> tags may appear
+    // Example: div.wotd-entry-wrapper:nth-child(1) > div:nth-child(4) > p:nth-child(2) (.wotd-entry-example)
+
+    let mut results: [String; 7] = Default::default();
+
+    let wrapper_selector = Selector::parse(".wotd-entry-wrapper").unwrap();
+    let wrappers = document.select(&wrapper_selector);
+
+    let name_selector = Selector::parse(".wotd-entry-headword").unwrap();
+    let date_selector = Selector::parse(".wotd-entry-date").unwrap();
+    // let names = wrappers.filter_map(|wotd| wotd.select(&name_selector).next());
+
+    // let name_list = names.map(|a| a.inner_html().trim().to_string());
+    // println!("name list");
+    // for n in name_list {
+    //     println!("{n}");
+    // }
+    let selectors = [
+        Selector::parse(".wotd-entry-headword").unwrap(),
+        Selector::parse(".wotd-entry-date").unwrap(),
+    ];
+
+    for wrapper in wrappers {
+        let mut i: usize = 0;
+        for selector in &selectors {
+            let value = wrapper
+                .select(&selector)
+                .next()
+                .unwrap()
+                .inner_html()
+                .trim()
+                .to_string();
+            println!("{value}");
+            results[i] = value;
+            i += 1;
+        }
+        // let name = wrapper
+        //     .select(&name_selector)
+        //     .next()
+        //     .unwrap()
+        //     .inner_html()
+        //     .trim()
+        //     .to_string();
+        // println!("{name}");
+        // results[0] = name;
+
+        // let date = wrapper
+        //     .select(&date_selector)
+        //     .next()
+        //     .unwrap()
+        //     .inner_html()
+        //     .trim()
+        //     .to_string();
+        // println!("{date}");
+        // results[1] = date;
+    }
+
+    // let result: Vec<String> = document
+    //     // Find all wotd-entry-wrapper
+    //     .select(&wrapper_selector)
+    //     // Loop through, find the headword
+    //     .filter_map(|wotd| wotd.select(&name_selector).next())
+    //     // Extract the headword values
+    //     .map(|a| a.inner_html().trim().to_string())
+    //     // Collect results into a vector
+    //     .collect();
+
+    // for r in result {
+    //     println!("{r}");
+    // }
 }
 
 async fn get_dictionary_com_page(page: u32) -> String {
     // let body = reqwest::get("https://www.dictionary.com/word-of-the-day?page={page}")
+    // Note: Last checked, Dictionary.com WOTD has 400 pages.
     let response: reqwest::Response = reqwest::get(format!(
         "https://www.dictionary.com/word-of-the-day?page={}",
         page
@@ -46,6 +142,7 @@ async fn get_dictionary_com_page(page: u32) -> String {
     .await
     .unwrap();
 
+    // TODO: .error_for_status()?
     match response.status() {
         reqwest::StatusCode::OK => {
             println!("OK");
