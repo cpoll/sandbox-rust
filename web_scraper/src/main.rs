@@ -8,14 +8,15 @@ use std::time;
 
 #[tokio::main]
 async fn main() {
+    // Note: Last checked, Dictionary.com WOTD has 400 pages.
     let page_range = 11..51;
     let csv_path =
         Path::new("/Users/cristian.poll/ws/sandbox-rust/web_scraper/output/wotd_list.csv");
 
-    // Create a csv writer and write the header. Will truncate existing file.
+    // Create a csv writer and write the header. Loads the file for append if it already exists.
     let mut wtr = create_or_load_file(csv_path);
 
-    // Loop through pages, parse and write them to the csv
+    // Loop through Dictionary.com pages, parse, and write them to the csv
     println!("Begin parsing");
     for i in page_range {
         println!("Parsing page {i}");
@@ -60,8 +61,6 @@ fn create_or_load_file(path: &Path) -> Writer<File> {
 }
 
 async fn get_dictionary_com_page(page: u32) -> String {
-    // let body = reqwest::get("https://www.dictionary.com/word-of-the-day?page={page}")
-    // Note: Last checked, Dictionary.com WOTD has 400 pages.
     let response: reqwest::Response = reqwest::get(format!(
         "https://www.dictionary.com/word-of-the-day?page={}",
         page
