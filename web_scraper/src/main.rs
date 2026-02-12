@@ -1,6 +1,8 @@
+use csv::Writer;
 use scraper::{Html, Selector};
 use std::fs;
 use std::fs::File;
+use std::path::Path;
 use std::{error::Error, io, process};
 
 const WORK_PATH: &str = "/Users/cristian.poll/ws/sandbox-rust/web_scraper/output";
@@ -15,18 +17,7 @@ async fn main() {
     // Create a csv writer and write the header. Will truncate existing file.
     // TODO: Don't truncate, so we can add on if our scrape ends early
     let csv_path: String = format!("{}/output.csv", WORK_PATH); // TODO: Use std::path::Path
-    let mut csv_file = File::create(csv_path).expect("path should be writable");
-    let mut wtr = csv::Writer::from_writer(csv_file);
-    wtr.write_record([
-        "Word",
-        "Date",
-        "Phonetics",
-        "Part of Speech",
-        "Definition",
-        "Explanation",
-        "Example",
-    ])
-    .expect("csv should be writable");
+    let wtr = create_or_load_file(&csv_path);
 
     println!("Parsing");
     let words = parse_dictionary_com_page(&text);
@@ -36,6 +27,32 @@ async fn main() {
     // Parse the page and concatenate it to the csv file
     // Should I use Serde instead?
     // [{ word: "foo", date: "123" }]
+}
+
+fn create_or_load_file(path: &str) -> Writer<File> {
+    let mut wtr: Writer<File>;
+    if (Path::new(path).exists()) {
+        let csv_file = File::options()
+            .read(false)
+            .write(true)
+            .open(path)
+            .expect("file to exist"); // TODO: Is it more idiomatic to try/error?
+        wtr = Writer::from_writer(csv_file);
+    } else {
+        let csv_file = File::create(path).expect("path should be writable");
+        wtr = Writer::from_writer(csv_file);
+        wtr.write_record([
+            "Word",
+            "Date",
+            "Phonetics",
+            "Part of Speech",
+            "Definition",
+            "Explanation",
+            "Example",
+        ])
+        .expect("csv should be writable");
+    }
+    return wtr;
 }
 
 fn save_page_result(content: &str, path: &str) {
@@ -68,8 +85,6 @@ fn parse_dictionary_com_page(text: &str) {
     let wrapper_selector = Selector::parse(".wotd-entry-wrapper").unwrap();
     let wrappers = document.select(&wrapper_selector);
 
-    let name_selector = Selector::parse(".wotd-entry-headword").unwrap();
-    let date_selector = Selector::parse(".wotd-entry-date").unwrap();
     // let names = wrappers.filter_map(|wotd| wotd.select(&name_selector).next());
 
     // let name_list = names.map(|a| a.inner_html().trim().to_string());
@@ -80,6 +95,11 @@ fn parse_dictionary_com_page(text: &str) {
     let selectors = [
         Selector::parse(".wotd-entry-headword").unwrap(),
         Selector::parse(".wotd-entry-date").unwrap(),
+        Selector::parse(".wotd-entry-phonetics").unwrap(),
+        Selector::parse(".wotd-entry-pos").unwrap(),
+        Selector::parse(".wotd-entry-definition").unwrap(),
+        Selector::parse(".wotd-entry-explanation-section p").unwrap(),
+        Selector::parse(".wotd-entry-example").unwrap(),
     ];
 
     for wrapper in wrappers {
@@ -96,40 +116,7 @@ fn parse_dictionary_com_page(text: &str) {
             results[i] = value;
             i += 1;
         }
-        // let name = wrapper
-        //     .select(&name_selector)
-        //     .next()
-        //     .unwrap()
-        //     .inner_html()
-        //     .trim()
-        //     .to_string();
-        // println!("{name}");
-        // results[0] = name;
-
-        // let date = wrapper
-        //     .select(&date_selector)
-        //     .next()
-        //     .unwrap()
-        //     .inner_html()
-        //     .trim()
-        //     .to_string();
-        // println!("{date}");
-        // results[1] = date;
     }
-
-    // let result: Vec<String> = document
-    //     // Find all wotd-entry-wrapper
-    //     .select(&wrapper_selector)
-    //     // Loop through, find the headword
-    //     .filter_map(|wotd| wotd.select(&name_selector).next())
-    //     // Extract the headword values
-    //     .map(|a| a.inner_html().trim().to_string())
-    //     // Collect results into a vector
-    //     .collect();
-
-    // for r in result {
-    //     println!("{r}");
-    // }
 }
 
 async fn get_dictionary_com_page(page: u32) -> String {
