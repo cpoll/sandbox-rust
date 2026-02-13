@@ -9,7 +9,7 @@ use std::time;
 #[tokio::main]
 async fn main() {
     // Note: Last checked, Dictionary.com WOTD has 400 pages.
-    let page_range = 11..51;
+    let page_range = 1..51;
     let csv_path =
         Path::new("/Users/cristian.poll/ws/sandbox-rust/web_scraper/output/wotd_list.csv");
 
@@ -28,7 +28,7 @@ async fn main() {
         }
         wtr.flush().expect("file is writable"); // Flush after every page
 
-        thread::sleep(time::Duration::from_secs(5));
+        thread::sleep(time::Duration::from_secs(2));
     }
     println!("Done");
 }
@@ -105,14 +105,13 @@ fn parse_dictionary_com_page(text: &str) -> Vec<Vec<String>> {
     for wrapper in wrappers {
         let mut word_properties: Vec<String> = Vec::new();
         for selector in &selectors {
-            let value = wrapper
-                .select(&selector)
-                .next()
-                .unwrap()
-                .inner_html()
-                .trim()
-                .to_string();
-            word_properties.push(value);
+            let value = wrapper.select(&selector).next();
+
+            if value == None {
+                word_properties.push("".to_string());
+            } else {
+                word_properties.push(value.unwrap().inner_html().trim().to_string());
+            }
         }
         results.push(word_properties);
     }
