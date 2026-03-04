@@ -1,7 +1,6 @@
 use csv::Writer;
 use scraper::{Html, Selector};
-use std::fs;
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::Path;
 use std::thread;
 use std::time;
